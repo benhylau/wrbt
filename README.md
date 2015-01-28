@@ -76,7 +76,7 @@ wrbt
 
 9. Bob's node sees connections coming in from Alice's node `fc00:0000:0000:0000:0000:0000:0000:AAAA` and optionally pins it to the entry for Alice in `authorizedPasswords`, so that password becomes dedicated to her node only.
 
->**IP-pinning** is optional.
+    >**IP-pinning** is optional.
 
 ## Cross-platform Peering & Platform-specific Handling
 

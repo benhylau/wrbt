@@ -20,7 +20,7 @@ wrbt
     }
     ```
 
-4. Bob then composes the following peering credentials and signs it with his cjdns private key to get `signatureOfBob`.
+4. Bob then composes the following peering credential.
 
     ```
     {
@@ -32,23 +32,29 @@ wrbt
     }
     ```
 
-5. Bob then composes the peering credentials with the signature into the following message, then encrypts the whole thing with `wrbtPk` and a `generatedNonce`, resulting in `encryptedCredentialsForAlice`.
+5. With that peering credential and some optional `metadata`, Bob composes the `node` JSON blob and signs it with his cjdns private key to get `signatureOfBob`.
 
     ```
-    {
-      "credentials": {
-        "externalIpOfBob:port": {
-          "name": "Bob",
-          "publicKey": "cjdnsPublicKeyOfBob",
-          "password": "generatedPasswordForAlice"
-        },
-        "metadata": {}
-      },
-      "signature": "signatureOfBob"
-    }
+	{
+	  "credentials": [
+	    {
+	      "node": {
+	        "credential": {
+	          "externalIpOfBob:port": {
+	            "name": "Bob",
+	            "publicKey": "cjdnsPublicKeyOfBob",
+	            "password": "generatedPasswordForAlice"
+	          }
+	        },
+	        "metadata": {}
+	      },
+	      "signature": "signatureOfBob"
+	    }
+	  ]
+	}
     ```
 
-6. Bob responds to Alice either synchronously,
+6. Bob encrypts the whole JSON blob with Alice's `wrbtPk` and a `generatedNonce`, resulting in `encryptedCredentialsForAlice`, then responds to Alice either synchronously with,
 
     ```
     {
@@ -57,13 +63,13 @@ wrbt
     }
     ```
 
-    or asynchronously, where `encodedMessage` is the above URL-encoded.
+    or asynchronously, where `encodedMessage` is the above JSON blob URL-encoded.
 
     ```
     scheme://host/?type=credentials&interface=udp&link=overlay&pk=wrbtPk&message=encodedMessage&cjdnsVersion=X&wrbtVersion=Y
     ```
 
-7. In the asynchronous case, Alice is able to know that this is a response to her earlier request based on the `scheme://host` and `wrbtPk`. The latter also ensures that only she can decrypt the `encryptedCredentialsForAlice`. Alice proceeds to decrypt the message with her `wrbtSk` and `generatedNonce`, revealing `credentials` and `signature`. Alice then attempts to verify that this set of credentials actually came from its owner, i.e. the holder of its cjdns private key. So Alice takes the `publicKey` from `credentials` and hashes it with the `signature`, and verifies that it matches with the hash of the `credentials`. The application then proceeds to ask Alice whether she wants to peer with the following node.
+7. In the asynchronous case, Alice is able to know that this is a response to her earlier request based on the `scheme://host` and `wrbtPk`. The latter also ensures that only she can decrypt the `encryptedCredentialsForAlice`. Alice proceeds to decrypt the message with her `wrbtSk` and `generatedNonce`, revealing the plain text `credentials`. Alice then attempts to verify that the `credential` actually came from the cjdns node's operator, i.e. the holder of its cjdns private key. So Alice takes the `publicKey` from `credential` and hashes it with the `signature`, and verifies that it matches with the hash of the `node`. The application then proceeds to ask Alice whether she wants to peer with the following node.
 
     ```
     Name:     Bob
@@ -72,7 +78,7 @@ wrbt
     Verified: true
     ```
 
-8. Alice accepts the peering offer and the application adds `credentials` to **cjdroute.conf** of Alice's node. Her node starts connecting to Bob's node.
+8. Alice accepts the peering offer and the application adds `credential` to **cjdroute.conf** of Alice's node. Her node starts connecting to Bob's node.
 
 9. Bob's node sees connections coming in from Alice's node `fc00:0000:0000:0000:0000:0000:0000:AAAA` and optionally pins it to the entry for Alice in `authorizedPasswords`, so that password becomes dedicated to her node only.
 
@@ -116,15 +122,15 @@ The private exchange of peering credentials is protected by `wrbtSk` and `wrbtPk
 
 Aside from the peering credentials, **wrbt** aims to keep the relation between the identity of a node, i.e. its `fc00::/8` address, and its operator from becoming public information. When Alice first advertises that she needs to find a peer, she has exposed that she operates a node associated with whatever metadata embedded in that peering request. However, that request does not contain her cjdns public key or `fc00::/8` address, so her node cannot be uniquely identified based on that information alone. It wasn't until she accepted Bob's peering offer that her `fc00::/8` address is communicated to Bob, and Bob alone, never publicly. This ensures the knowledge of the association between node identitiy and personal identity is limited to trusted peers.
 
-Bob trusts Alice the moment he sends along his credentials in response to Alice's request. Alice has all the information necessary, i.e. `cjdnsPublicKeyOfBob` and `externalIpOfBob`, to associate Bob's node with his personal identity. **wrbt** ensures that the response can be decrypted by Alice alone, but Bob is solely responsible for judging to trust Alice when he sends along credentials.
+Bob trusts Alice the moment he sends his peering credentials in response to Alice's request. Alice has all the information necessary, i.e. `cjdnsPublicKeyOfBob` and `externalIpOfBob`, to associate Bob's node with his personal identity. **wrbt** ensures that the response can be decrypted by Alice alone, but Bob is solely responsible for judging to trust Alice when he sends along credentials.
 
 ## Verification of Identity & Man-in-the-middle Attacks
 
-The signing of the credentials performed by Bob, with his cjdns private key, allows for Alice to verify that the credentials are in fact coming from the operator of the node. It means Bob is not just sending to her credentials of a random node that does not belong to him. If Alice can also verify that this response did in fact come from Bob, say, [a trusted third-party tweeted a fingerprint of Bob's response](https://firstlook.org/theintercept/2014/10/28/smuggling-snowden-secrets/), to rule out a man-in-the-middle attack, then Alice can verify that she is indeed peering with a node operated by Bob.
+The signing of the `node` bundle performed by Bob, with his cjdns private key, allows for Alice to verify that the `credential` and `metadata` are in fact coming from the operator of the node. It means Bob is not just sending to her credentials of a random node that does not even belong to him. If Alice can also verify that this message did in fact come from Bob, say, [a trusted third-party tweeted a fingerprint of Bob's response](https://firstlook.org/theintercept/2014/10/28/smuggling-snowden-secrets/), to rule out a man-in-the-middle attack, then Alice can verify that she is indeed peering with a node operated by Bob.
 
 >**Signature** is optional.
 
-This verification, however, may not always be necessary. Consider the case where Halley wants to get on Hyperboria, and her friend Icarus wants to give her peering credentials to his VPS from his Android phone, which is peered with the VPS. Icarus doesn't mind sharing the same password, or he has passwords set aside for situations like this. The point is, his Android node does not have the private key of the VPS node, so there is no way for Icarus to sign the credentials he is about to send Halley. Icarus will then send a peering response without a signature, and Halley's application would ask if she wants to peer with the following node.
+This verification, however, may not always be necessary. Consider the case where Halley wants to get on Hyperboria, and her friend Icarus wants to give her peering credentials to his VPS from his Android phone, which is peered with the VPS. Icarus doesn't mind sharing the same password, or he has passwords set aside for situations like this. The point is, his Android node does not have the private key of the VPS node, so there is no way for Icarus to sign the `node` bundle he is about to send Halley. Icarus will then send a credentials message without a signature, and Halley's application would ask if she wants to peer with the following node.
 
 ```
 Name:     Icarus
@@ -143,24 +149,11 @@ Some medium of exchange are inherently secure and allow for Bob to broadcast his
 scheme://host/?type=credentials&interface=udp&link=overlay&message=encodedMessage&cjdnsVersion=X&wrbtVersion=Y
 ```
 
-Note the absence of the `pk` query parameter, which in a secure exchange would have been acquired from Alice's peering request. Since this is a clear text broadcast, secured by proximity in the NFC case, the`encodedMessage` is just the URL-encoded text of the following unencrypted credentials. Upon receiving this, Alice's node should recognize this as an unencrypted message by the lack of its `pk` query parameter.
-
-```
-{
-  "credentials": {
-    "externalIpOfBob:port": {
-      "name": "Bob",
-      "publicKey": "cjdnsPublicKeyOfBob",
-      "password": "generatedPasswordForAlice"
-    }
-  },
-  "signature": "signatureOfBob"
-}
-```
+Note the absence of the `pk` query parameter, which in a secure exchange would have been acquired from Alice's peering request. Since this is a clear text broadcast, secured by proximity in the NFC case, the `encodedMessage` is just the URL-encoded text of the plain text JSON blob containing the `credentials`. Upon receiving this, Alice's node should recognize this as an unencrypted message by the lack of its `pk` query parameter.
 
 ## Standard Protocols for Connectivity
 
-We need a standard way for Alice to, in her peering request, indicate to Bob how her node would like to peer with other nodes. By specifying the `interface` and `link`, Bob will be able to figure out whether his node can peer with Alice's, and unambiguously create a set of credentials for her.
+We need a standard way for Alice to, in her peering request, indicate to Bob how her node would like to peer with other nodes. By specifying the `interface` and `link`, Bob will be able to figure out whether his node can peer with Alice's, and unambiguously create credentials for her.
 
 |Interface |Query parameter |Support          |
 |:---------|:---------------|:----------------|
@@ -175,13 +168,13 @@ We need a standard way for Alice to, in her peering request, indicate to Bob how
 
 ## Auto-peering Mobile Nodes & Ad-hoc Networks
 
-The standard way for a cjdns node to handle a peering request should be to *ask* the operator whether to offer peering by responding with a set of credentials. However, in an ad-hoc network made up of mobile nodes, constantly moving in- and out-of-range, asking all the time may be impractical. Instead, the operator may elect to enable *auto-peering*. This does not mean a shared password or accepting passwordless unauthenticated connections. It only means the node will automatically and silently respond to peering requests with newly created credentials. This way, mobile nodes can acquire new peers as they move around, and the unique passwords allow each node to shut down a particular misbehaving peer.
+The standard way for a cjdns node to handle a peering request should be to *ask* the operator whether to offer peering by responding with a set of credentials. However, in an ad-hoc network made up of mobile nodes, constantly moving in- and out-of-range, asking all the time may be impractical. Instead, the operator may elect to enable *auto-peering*. This does not mean a shared password or accepting passwordless unauthenticated connections. It only means the node will automatically and silently respond to peering requests with a newly created credential. This way, mobile nodes can acquire new peers as they move around, and the unique passwords allow each node to shut down a particular misbehaving peer.
 
 ## Unauthenticated Connections
 
 >**Password** is optional.
 
-While most peering credentials should contain a password, some protocols can support unauthenticated connections. This would be common when connecting over the Ethernet interface. In this case, Alice specifies `interface=eth` in her peering request, then Bob sends credentials without `password`.
+While most peering credentials should contain a password, some protocols can support unauthenticated connections. This would be common when connecting over the Ethernet interface. In this case, Alice specifies `interface=eth` in her peering request, then Bob sends a message where `credential` does not contain a `password`.
 
 ## Query Parameters
 
@@ -219,7 +212,7 @@ scheme://host/?type=credentials&interface=udp&link=overlay&pk=wrbtPk&message=enc
 
 ## Optional Metadata
 
-Metadata, a JSON blob of key-value-pairs, can optionally be provided in either a peering request or along with a credentials bundle. When Alice provides metadata in a peering request, the content is available as clear text, accessible to whoever sees her peering request. When metadata is included by Bob as part of the credentials bundle, it is encrypted with Alice's `wrbtPk`, and is intended to be read by Alice only.
+Metadata, a JSON blob of key-value-pairs, can optionally be provided in either a peering request or along with a credentials message. When Alice provides metadata in a peering request, the content is available as clear text, accessible to whoever sees her peering request. When metadata is included by Bob as part of the `node` bundle in his credentials message, it is encrypted with Alice's `wrbtPk`, and is intended to be read by Alice only.
 
 The following is a standard set of metadata entries.
 

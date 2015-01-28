@@ -167,11 +167,11 @@ We need a standard way for Alice to, in her peering request, indicate to Bob how
 |UDP       |`interface=udp` |IPv4 or IPv6     |
 |ETH       |`interface=eth` |All beacon modes |
 
-|Physical link    |Query parameter   |Via                       |UDP                |ETH                |
-|:----------------|:-----------------|:-------------------------|:-----------------:|:-----------------:|
+|Physical link    |Query parameter   |Via                       |UDP       |ETH     |
+|:----------------|:-----------------|:-------------------------|:-------:|:-------:|
 |WiFi Direct      |`link=wifiDirect` |Connected devices         |&#10003; |&#10003; |
 |Bluetooth        |`link=bluetooth`  |Paired devices            |&#10003; |&#10003; |
-|Clearnet Overlay |`link=overlay`    |WiFi AP or mobile network |&#10003; |                   |
+|Clearnet Overlay |`link=overlay`    |WiFi AP or mobile network |&#10003; |         |
 
 ## Auto-peering Mobile Nodes & Ad-hoc Networks
 
@@ -191,13 +191,13 @@ While most peering credentials should contain a password, some protocols can sup
 scheme://host/?type=peer&interface=udp&link=overlay&pk=wrbtPk&metadata=metadataOfAlice&cjdnsVersion=X&wrbtVersion=Y
 ```
 
-|Key            |Value                                                                           |Required           |
-|:--------------|:-------------------------------------------------------------------------------|:-----------------:|
+|Key            |Value                                                                           |Required |
+|:--------------|:-------------------------------------------------------------------------------|:-------:|
 |`type`         |`peer`                                                                          |&#10003; |
 |`interface`    |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
 |`link`         |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
 |`pk`           |Curve25519 public key, encoded with `nacl.encoding.URLSafeBase64Encoder`        |&#10003; |
-|`metadata`     |JSON blob of metadata, encoded with `nacl.encoding.URLSafeBase64Encoder`        |                   |
+|`metadata`     |JSON blob of metadata, encoded with `nacl.encoding.URLSafeBase64Encoder`        |         |
 |`cjdnsVersion` |integer                                                                         |&#10003; |
 |`wrbtVersion`  |integer                                                                         |&#10003; |
 
@@ -207,12 +207,12 @@ scheme://host/?type=peer&interface=udp&link=overlay&pk=wrbtPk&metadata=metadataO
 scheme://host/?type=credentials&interface=udp&link=overlay&pk=wrbtPk&message=encodedMessage&cjdnsVersion=X&wrbtVersion=Y
 ```
 
-|Key              |Value                                                                           |Required           |
-|:----------------|:-------------------------------------------------------------------------------|:-----------------:|
+|Key              |Value                                                                           |Required |
+|:----------------|:-------------------------------------------------------------------------------|:-------:|
 |`type`           |`credentials`                                                                   |&#10003; |
 |`interface`      |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
 |`link`           |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
-|`pk`             |public key from peering request; omit when broadcasting                         |                   |
+|`pk`             |public key from peering request; omit when broadcasting                         |         |
 |`encodedMessage` |credentials encoded with `nacl.encoding.URLSafeBase64Encoder`                   |&#10003; |
 |`cjdnsVersion`   |integer                                                                         |&#10003; |
 |`wrbtVersion`    |integer                                                                         |&#10003; |

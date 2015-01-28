@@ -212,8 +212,8 @@ scheme://host/?type=credentials&interface=udp&link=overlay&pk=wrbtPk&message=enc
 |`type`           |`credentials`                                                                   |&#10003; |
 |`interface`      |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
 |`link`           |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
-|`pk`             |public key from peering request; omit when broadcasting                         |         |
-|`encodedMessage` |credentials encoded with `nacl.encoding.URLSafeBase64Encoder`                   |&#10003; |
+|`pk`             |Public key from peering request; omit when broadcasting                         |         |
+|`encodedMessage` |Credentials encoded with `nacl.encoding.URLSafeBase64Encoder`                   |&#10003; |
 |`cjdnsVersion`   |integer                                                                         |&#10003; |
 |`wrbtVersion`    |integer                                                                         |&#10003; |
 

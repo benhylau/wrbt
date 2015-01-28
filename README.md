@@ -177,7 +177,7 @@ We need a standard way for Alice to, in her peering request, indicate to Bob how
 
 The standard way for a cjdns node to handle a peering request should be to *ask* the operator whether to offer peering by responding with a set of credentials. However, in an ad-hoc network made up of mobile nodes, constantly moving in- and out-of-range, asking all the time may be impractical. Instead, the operator may elect to enable *auto-peering*. This does not mean a shared password or accepting passwordless unauthenticated connections. It only means the node will automatically and silently respond to peering requests with newly created credentials. This way, mobile nodes can acquire new peers as they move around, and the unique passwords allow each node to shut down a particular misbehaving peer.
 
-## Unauthentication Connections
+## Unauthenticated Connections
 
 >**Password** is optional.
 

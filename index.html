@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
+
+    <title>wrbt by benhylau</title>
+  </head>
+
+  <body>
+
+    <header>
+      <div class="container">
+        <h1>wrbt</h1>
+        <h2>Protocol to facilitate cjdns peering</h2>
+
+        <section id="downloads">
+          <a href="https://github.com/benhylau/wrbt/zipball/master" class="btn">Download as .zip</a>
+          <a href="https://github.com/benhylau/wrbt/tarball/master" class="btn">Download as .tar.gz</a>
+          <a href="https://github.com/benhylau/wrbt" class="btn btn-github"><span class="icon"></span>View on GitHub</a>
+        </section>
+      </div>
+    </header>
+
+    <div class="container">
+      <section id="main_content">
+        <h1>
+<a id="wrbt" class="anchor" href="#wrbt" aria-hidden="true"><span class="octicon octicon-link"></span></a>wrbt</h1>
+
+<p><strong>wrbt</strong>, pronounced <em>wrabbit</em>, is a protocol that facilitates peering of cjdns nodes. The two parties peering through <strong>wrbt</strong> are able to exchange credentials securely and privately over an insecure channel. Peering of two cjdns nodes, owned by Alice and Bob, goes something like this.</p>
+
+<ol>
+<li><p>Alice just set up a new node and is in need of a peer, so she generates a set of private and public keys that are completely independent of her cjdns keys. Let's call these <code>wrbtSk</code> and <code>wrbtPk</code>, respectively.</p></li>
+<li>
+<p>Alice sends out a request to peer via an insecure channel. Since the channel is insecure, we may as well assume it's a public broadcast to the entire world.</p>
+
+<pre><code>scheme://host/?type=peer&amp;interface=udp&amp;link=overlay&amp;pk=wrbtPk&amp;metadata=metadataOfAlice&amp;cjdnsVersion=X&amp;wrbtVersion=Y
+</code></pre>
+</li>
+<li>
+<p>Bob sees Alice's request and offers to peer. From his node, he generates a new password for Alice and adds it to the list of <code>authorizedPasswords</code> in his node's <strong>cjdroute.conf</strong>.</p>
+
+<pre><code>{
+  "name": "Alice",
+  "password": "generatedPasswordForAlice"
+}
+</code></pre>
+</li>
+<li>
+<p>Bob then composes the following peering credential.</p>
+
+<pre><code>{
+  "externalIpOfBob:port": {
+    "name": "Bob",
+    "publicKey": "cjdnsPublicKeyOfBob",
+    "password": "generatedPasswordForAlice"
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>With that peering credential and some optional <code>metadata</code>, Bob composes the <code>node</code> JSON blob and signs it with his cjdns private key to get <code>signatureOfBob</code>.</p>
+
+<pre><code>{
+  "credentials": [
+    {
+      "node": {
+        "credential": {
+          "externalIpOfBob:port": {
+            "name": "Bob",
+            "publicKey": "cjdnsPublicKeyOfBob",
+            "password": "generatedPasswordForAlice"
+          }
+        },
+        "metadata": {}
+      },
+      "signature": "signatureOfBob"
+    }
+  ]
+}
+</code></pre>
+</li>
+<li>
+<p>Bob encrypts the whole JSON blob with Alice's <code>wrbtPk</code> and a <code>generatedNonce</code>, resulting in <code>encryptedCredentialsForAlice</code>, then responds to Alice either synchronously with,</p>
+
+<pre><code>{
+  "encryptedCredentials": "encryptedCredentialsForAlice",
+  "nonce": "generatedNonce"
+}
+</code></pre>
+
+<p>or asynchronously, where <code>encodedMessage</code> is the above JSON blob URL-encoded.</p>
+
+<pre><code>scheme://host/?type=credentials&amp;interface=udp&amp;link=overlay&amp;pk=wrbtPk&amp;message=encodedMessage&amp;cjdnsVersion=X&amp;wrbtVersion=Y
+</code></pre>
+</li>
+<li>
+<p>In the asynchronous case, Alice is able to know that this is a response to her earlier request based on the <code>scheme://host</code> and <code>wrbtPk</code>. The latter also ensures that only she can decrypt the <code>encryptedCredentialsForAlice</code>. Alice proceeds to decrypt the message with her <code>wrbtSk</code> and <code>generatedNonce</code>, revealing the plain text <code>credentials</code>. Alice then attempts to verify that the <code>credential</code> actually came from the cjdns node's operator, i.e. the holder of its cjdns private key. So Alice takes the <code>publicKey</code> from <code>credential</code> and hashes it with the <code>signature</code>, and verifies that it matches with the hash of the <code>node</code>. The application then proceeds to ask Alice whether she wants to peer with the following node.</p>
+
+<pre><code>Name:     Bob
+Protocol: UDP via Clearnet Overlay
+Address:  fc00:0000:0000:0000:0000:0000:0000:BBBB
+Verified: true
+</code></pre>
+</li>
+<li><p>Alice accepts the peering offer and the application adds <code>credential</code> to <strong>cjdroute.conf</strong> of Alice's node. Her node starts connecting to Bob's node.</p></li>
+<li>
+<p>Bob's node sees connections coming in from Alice's node <code>fc00:0000:0000:0000:0000:0000:0000:AAAA</code> and optionally pins it to the entry for Alice in <code>authorizedPasswords</code>, so that password becomes dedicated to her node only.</p>
+
+<blockquote>
+<p><strong>IP-pinning</strong> is optional.</p>
+</blockquote>
+</li>
+</ol>
+
+<h2>
+<a id="cross-platform-peering--platform-specific-handling" class="anchor" href="#cross-platform-peering--platform-specific-handling" aria-hidden="true"><span class="octicon octicon-link"></span></a>Cross-platform Peering &amp; Platform-specific Handling</h2>
+
+<p>One way the <a href="https://github.com/berlinmeshnet/cjdns-android">Android application</a> can add peers is through the <code>http://findpeer.hyperboria.net</code> implementation of <strong>wrbt</strong>. When Caleb installed the Android application, he does not know anyone on Hyperboria, so he tweeted the following message generated by the Android app, in hopes that someone will offer to peer with his Android node.</p>
+
+<pre><code>#followTheWhiteRabbit findpeer.hyperboria.net/?type=peer...
+</code></pre>
+
+<p>The URL, shortened by Twitter, expands into something like this when clicked.</p>
+
+<pre><code>http://findpeer.hyperboria.net/?type=peer&amp;interface=udp&amp;link=overlay&amp;pk=wrbtPk&amp;metadata=metadataOfCaleb&amp;cjdnsVersion=X&amp;wrbtVersion=Y
+</code></pre>
+
+<p>Danielle, who actively monitors the <strong>#followTheWhiteRabbit</strong> hashtag, is on her computer when she saw the tweet. That computer is already a cjdns node, so she decides to use a <strong>wrbt</strong> desktop application to generate a response, offering to peer with Caleb. The desktop application takes Caleb's URL as an input, and does all the <strong>wrbt</strong> magic as described above, resulting in the following which Danielle replies to Caleb with via Twitter.</p>
+
+<pre><code>http://findpeer.hyperboria.net/?type=credentials&amp;interface=udp&amp;link=overlay&amp;pk=wrbtPk&amp;message=encodedMessage&amp;cjdnsVersion=X&amp;wrbtVersion=Y
+</code></pre>
+
+<p>Ed, who saw Caleb's tweet from his phone, also happens to have cjdns running on his phone with the Android application. He clicks on the link, and is asked if he wants to open the link with the cjdns application, because application advertises itself as a handler for the scheme <code>http</code> and host <code>findpeer.hyperboria.net</code>. This allows the cjdns Android app to do what the desktop app did for Danielle.</p>
+
+<p>Faye saw the tweet on her laptop, has no idea what this is, but clicks on the link anyways. She is directed to a welcome page, introducing her to the wonderful world of Hyperborea.</p>
+
+<p>Georgina, who also knows nothing about the existance of a parallel internet, clicked on the tweet from her Android phone. <code>findpeer.hyperboria.net</code> is set up in a way that redirects all Android clients to <code>market://details?id=cjdns.android.package.name</code>, which opens up the cjdns Android application download page in Google Play.</p>
+
+<h2>
+<a id="auto-peering--implementation-specific-behaviour" class="anchor" href="#auto-peering--implementation-specific-behaviour" aria-hidden="true"><span class="octicon octicon-link"></span></a>Auto-peering &amp; Implementation-specific Behaviour</h2>
+
+<p>The implementation-specified <code>scheme://host</code> allows for implementation-specific behaviour. The previous example, <code>http://findpeer.hyperboria.net</code>, is only one example for an implementation. It is one where peering is asynchronous, requiring the other party to extend a delayed response after manually deciding to peer with Caleb, perhaps based on some criteria embedded in the <a href="#optional-metadata">metadata</a>.</p>
+
+<p>You can easily imagine a cjdns node that synchronously hands out unique credentials to whoever asks for it at <code>http://[fc00:0000:0000:0000:0000:0000:0000:XXXX]</code>. This, of course, requires Caleb to have an existing peer to reach it in the first place. This same server can also hand out credentials in the clearnet by having a clearnet domain. Unrestricted handing out of peering credentials is probably self-destructive, but <strong>wrbt</strong> does not limit one from implementing whatever self-destructive behaviour. On the other hand, it ensures that the exchange of credentials and other private information are conducted in a secure manner, and by enforcing a unique password per peer, it allows the node to break away from any particularly abusive relationship. The node can also engage in hook-ups by issuing passwords that expire, i.e. removal from <code>authorizedPasswords</code> after some fixed time.</p>
+
+<h2>
+<a id="privacy--anonymity" class="anchor" href="#privacy--anonymity" aria-hidden="true"><span class="octicon octicon-link"></span></a>Privacy &amp; Anonymity</h2>
+
+<p>The private exchange of peering credentials is protected by <code>wrbtSk</code> and <code>wrbtPk</code>. It is important that each responding node generates a unique nonce when using <code>wrbtPk</code> to generate the <code>encryptedCredentials</code>.</p>
+
+<p>Aside from the peering credentials, <strong>wrbt</strong> aims to keep the relation between the identity of a node, i.e. its <code>fc00::/8</code> address, and its operator from becoming public information. When Alice first advertises that she needs to find a peer, she has exposed that she operates a node associated with whatever metadata embedded in that peering request. However, that request does not contain her cjdns public key or <code>fc00::/8</code> address, so her node cannot be uniquely identified based on that information alone. It wasn't until she accepted Bob's peering offer that her <code>fc00::/8</code> address is communicated to Bob, and Bob alone, never publicly. This ensures the knowledge of the association between node identitiy and personal identity is limited to trusted peers.</p>
+
+<p>Bob trusts Alice the moment he sends his peering credentials in response to Alice's request. Alice has all the information necessary, i.e. <code>cjdnsPublicKeyOfBob</code> and <code>externalIpOfBob</code>, to associate Bob's node with his personal identity. <strong>wrbt</strong> ensures that the response can be decrypted by Alice alone, but Bob is solely responsible for judging to trust Alice when he sends along credentials.</p>
+
+<h2>
+<a id="verification-of-identity--man-in-the-middle-attacks" class="anchor" href="#verification-of-identity--man-in-the-middle-attacks" aria-hidden="true"><span class="octicon octicon-link"></span></a>Verification of Identity &amp; Man-in-the-middle Attacks</h2>
+
+<p>The signing of the <code>node</code> bundle performed by Bob, with his cjdns private key, allows for Alice to verify that the <code>credential</code> and <code>metadata</code> are in fact coming from the operator of the node. It means Bob is not just sending to her credentials of a random node that does not even belong to him. If Alice can also verify that this message did in fact come from Bob, say, <a href="https://firstlook.org/theintercept/2014/10/28/smuggling-snowden-secrets/">a trusted third-party tweeted a fingerprint of Bob's response</a>, to rule out a man-in-the-middle attack, then Alice can verify that she is indeed peering with a node operated by Bob.</p>
+
+<blockquote>
+<p><strong>Signature</strong> is optional.</p>
+</blockquote>
+
+<p>This verification, however, may not always be necessary. Consider the case where Halley wants to get on Hyperboria, and her friend Icarus wants to give her peering credentials to his VPS from his Android phone, which is peered with the VPS. Icarus doesn't mind sharing the same password, or he has passwords set aside for situations like this. The point is, his Android node does not have the private key of the VPS node, so there is no way for Icarus to sign the <code>node</code> bundle he is about to send Halley. Icarus will then send a credentials message without a signature, and Halley's application would ask if she wants to peer with the following node.</p>
+
+<pre><code>Name:     Icarus
+Protocol: UDP via Clearnet Overlay
+Address:  fc00:0000:0000:0000:0000:0000:0000:IIII
+Verified: false
+</code></pre>
+
+<h2>
+<a id="insecure-broadcasting-of-credentials" class="anchor" href="#insecure-broadcasting-of-credentials" aria-hidden="true"><span class="octicon octicon-link"></span></a>Insecure Broadcasting of Credentials</h2>
+
+<blockquote>
+<p><strong>Encryption</strong> is optional.</p>
+</blockquote>
+
+<p>Some medium of exchange are inherently secure and allow for Bob to broadcast his peering credentials in clear text. One such use case is when Alice and Bob want to peer their Android nodes over NFC, by physically tapping their phones. In this case, Bob does not need any information from Alice, he simply broadcasts the following over NFC.</p>
+
+<pre><code>scheme://host/?type=credentials&amp;interface=udp&amp;link=overlay&amp;message=encodedMessage&amp;cjdnsVersion=X&amp;wrbtVersion=Y
+</code></pre>
+
+<p>Note the absence of the <code>pk</code> query parameter, which in a secure exchange would have been acquired from Alice's peering request. Since this is a clear text broadcast, secured by proximity in the NFC case, the <code>encodedMessage</code> is just the URL-encoded text of the plain text JSON blob containing the <code>credentials</code>. Upon receiving this, Alice's node should recognize this as an unencrypted message by the lack of its <code>pk</code> query parameter.</p>
+
+<h2>
+<a id="standard-protocols-for-connectivity" class="anchor" href="#standard-protocols-for-connectivity" aria-hidden="true"><span class="octicon octicon-link"></span></a>Standard Protocols for Connectivity</h2>
+
+<p>We need a standard way for Alice to, in her peering request, indicate to Bob how her node would like to peer with other nodes. By specifying the <code>interface</code> and <code>link</code>, Bob will be able to figure out whether his node can peer with Alice's, and unambiguously create credentials for her.</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">Interface</th>
+<th align="left">Query parameter</th>
+<th align="left">Support</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">UDP</td>
+<td align="left"><code>interface=udp</code></td>
+<td align="left">IPv4 or IPv6</td>
+</tr>
+<tr>
+<td align="left">ETH</td>
+<td align="left"><code>interface=eth</code></td>
+<td align="left">All beacon modes</td>
+</tr>
+</tbody>
+</table>
+
+<table>
+<thead>
+<tr>
+<th align="left">Physical link</th>
+<th align="left">Query parameter</th>
+<th align="left">Via</th>
+<th align="center">UDP</th>
+<th align="center">ETH</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">WiFi Direct</td>
+<td align="left"><code>link=wifiDirect</code></td>
+<td align="left">Connected devices</td>
+<td align="center">✓</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left">Bluetooth</td>
+<td align="left"><code>link=bluetooth</code></td>
+<td align="left">Paired devices</td>
+<td align="center">✓</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left">Clearnet Overlay</td>
+<td align="left"><code>link=overlay</code></td>
+<td align="left">WiFi AP or mobile network</td>
+<td align="center">✓</td>
+<td align="center"></td>
+</tr>
+</tbody>
+</table>
+
+<h2>
+<a id="auto-peering-mobile-nodes--ad-hoc-networks" class="anchor" href="#auto-peering-mobile-nodes--ad-hoc-networks" aria-hidden="true"><span class="octicon octicon-link"></span></a>Auto-peering Mobile Nodes &amp; Ad-hoc Networks</h2>
+
+<p>The standard way for a cjdns node to handle a peering request should be to <em>ask</em> the operator whether to offer peering by responding with a set of credentials. However, in an ad-hoc network made up of mobile nodes, constantly moving in- and out-of-range, asking all the time may be impractical. Instead, the operator may elect to enable <em>auto-peering</em>. This does not mean a shared password or accepting passwordless unauthenticated connections. It only means the node will automatically and silently respond to peering requests with a newly created credential. This way, mobile nodes can acquire new peers as they move around, and the unique passwords allow each node to shut down a particular misbehaving peer.</p>
+
+<h2>
+<a id="unauthenticated-connections" class="anchor" href="#unauthenticated-connections" aria-hidden="true"><span class="octicon octicon-link"></span></a>Unauthenticated Connections</h2>
+
+<blockquote>
+<p><strong>Password</strong> is optional.</p>
+</blockquote>
+
+<p>While most peering credentials should contain a password, some protocols can support unauthenticated connections. This would be common when connecting over the Ethernet interface. In this case, Alice specifies <code>interface=eth</code> in her peering request, then Bob sends a message where <code>credential</code> does not contain a <code>password</code>.</p>
+
+<h2>
+<a id="query-parameters" class="anchor" href="#query-parameters" aria-hidden="true"><span class="octicon octicon-link"></span></a>Query Parameters</h2>
+
+<h3>
+<a id="peering-request" class="anchor" href="#peering-request" aria-hidden="true"><span class="octicon octicon-link"></span></a>Peering Request</h3>
+
+<pre><code>scheme://host/?type=peer&amp;interface=udp&amp;link=overlay&amp;pk=wrbtPk&amp;metadata=metadataOfAlice&amp;cjdnsVersion=X&amp;wrbtVersion=Y
+</code></pre>
+
+<table>
+<thead>
+<tr>
+<th align="left">Key</th>
+<th align="left">Value</th>
+<th align="center">Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><code>type</code></td>
+<td align="left"><code>peer</code></td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>interface</code></td>
+<td align="left">See <a href="#standard-protocols-for-connectivity">Standard Protocols for Connectivity</a>
+</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>link</code></td>
+<td align="left">See <a href="#standard-protocols-for-connectivity">Standard Protocols for Connectivity</a>
+</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>pk</code></td>
+<td align="left">Curve25519 public key, encoded with <code>nacl.encoding.URLSafeBase64Encoder</code>
+</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>metadata</code></td>
+<td align="left">JSON blob of metadata, encoded with <code>nacl.encoding.URLSafeBase64Encoder</code>
+</td>
+<td align="center"></td>
+</tr>
+<tr>
+<td align="left"><code>cjdnsVersion</code></td>
+<td align="left">integer</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>wrbtVersion</code></td>
+<td align="left">integer</td>
+<td align="center">✓</td>
+</tr>
+</tbody>
+</table>
+
+<h3>
+<a id="credentials-asynchronous" class="anchor" href="#credentials-asynchronous" aria-hidden="true"><span class="octicon octicon-link"></span></a>Credentials (Asynchronous)</h3>
+
+<pre><code>scheme://host/?type=credentials&amp;interface=udp&amp;link=overlay&amp;pk=wrbtPk&amp;message=encodedMessage&amp;cjdnsVersion=X&amp;wrbtVersion=Y
+</code></pre>
+
+<table>
+<thead>
+<tr>
+<th align="left">Key</th>
+<th align="left">Value</th>
+<th align="center">Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><code>type</code></td>
+<td align="left"><code>credentials</code></td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>interface</code></td>
+<td align="left">See <a href="#standard-protocols-for-connectivity">Standard Protocols for Connectivity</a>
+</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>link</code></td>
+<td align="left">See <a href="#standard-protocols-for-connectivity">Standard Protocols for Connectivity</a>
+</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>pk</code></td>
+<td align="left">Public key from peering request; omit when broadcasting</td>
+<td align="center"></td>
+</tr>
+<tr>
+<td align="left"><code>encodedMessage</code></td>
+<td align="left">Credentials encoded with <code>nacl.encoding.URLSafeBase64Encoder</code>
+</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>cjdnsVersion</code></td>
+<td align="left">integer</td>
+<td align="center">✓</td>
+</tr>
+<tr>
+<td align="left"><code>wrbtVersion</code></td>
+<td align="left">integer</td>
+<td align="center">✓</td>
+</tr>
+</tbody>
+</table>
+
+<h2>
+<a id="optional-metadata" class="anchor" href="#optional-metadata" aria-hidden="true"><span class="octicon octicon-link"></span></a>Optional Metadata</h2>
+
+<p>Metadata, a JSON blob of key-value-pairs, can optionally be provided in either a peering request or along with a credentials message. When Alice provides metadata in a peering request, the content is available as clear text, accessible to whoever sees her peering request. When metadata is included by Bob as part of the <code>node</code> bundle in his credentials message, it is encrypted with Alice's <code>wrbtPk</code>, and is intended to be read by Alice only.</p>
+
+<p>The following is a standard set of metadata entries.</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">Key</th>
+<th align="left">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><code>name</code></td>
+<td align="left">string</td>
+</tr>
+<tr>
+<td align="left"><code>platform</code></td>
+<td align="left">
+<code>desktop</code> or <code>android</code>
+</td>
+</tr>
+<tr>
+<td align="left"><code>location</code></td>
+<td align="left">string formatted "latitudeFloat,longitudeFloat"</td>
+</tr>
+<tr>
+<td align="left"><code>isOverlayIpStatic</code></td>
+<td align="left">boolean</td>
+</tr>
+</tbody>
+</table>
+      </section>
+    </div>
+
+    
+  </body>
+</html>

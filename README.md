@@ -169,9 +169,9 @@ We need a standard way for Alice to, in her peering request, indicate to Bob how
 
 |Physical link    |Query parameter   |Via                       |UDP                |ETH                |
 |:----------------|:-----------------|:-------------------------|:-----------------:|:-----------------:|
-|WiFi Direct      |`link=wifiDirect` |Connected devices         |:heavy_check_mark: |:heavy_check_mark: |
-|Bluetooth        |`link=bluetooth`  |Paired devices            |:heavy_check_mark: |:heavy_check_mark: |
-|Clearnet Overlay |`link=overlay`    |WiFi AP or mobile network |:heavy_check_mark: |                   |
+|WiFi Direct      |`link=wifiDirect` |Connected devices         |&#10003; |&#10003; |
+|Bluetooth        |`link=bluetooth`  |Paired devices            |&#10003; |&#10003; |
+|Clearnet Overlay |`link=overlay`    |WiFi AP or mobile network |&#10003; |                   |
 
 ## Auto-peering Mobile Nodes & Ad-hoc Networks
 
@@ -193,13 +193,13 @@ scheme://host/?type=peer&interface=udp&link=overlay&pk=wrbtPk&metadata=metadataO
 
 |Key            |Value                                                                           |Required           |
 |:--------------|:-------------------------------------------------------------------------------|:-----------------:|
-|`type`         |`peer`                                                                          |:heavy_check_mark: |
-|`interface`    |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |:heavy_check_mark: |
-|`link`         |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |:heavy_check_mark: |
-|`pk`           |Curve25519 public key, encoded with `nacl.encoding.URLSafeBase64Encoder`        |:heavy_check_mark: |
+|`type`         |`peer`                                                                          |&#10003; |
+|`interface`    |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
+|`link`         |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
+|`pk`           |Curve25519 public key, encoded with `nacl.encoding.URLSafeBase64Encoder`        |&#10003; |
 |`metadata`     |JSON blob of metadata, encoded with `nacl.encoding.URLSafeBase64Encoder`        |                   |
-|`cjdnsVersion` |integer                                                                         |:heavy_check_mark: |
-|`wrbtVersion`  |integer                                                                         |:heavy_check_mark: |
+|`cjdnsVersion` |integer                                                                         |&#10003; |
+|`wrbtVersion`  |integer                                                                         |&#10003; |
 
 ### Credentials (Asynchronous)
 
@@ -209,13 +209,13 @@ scheme://host/?type=credentials&interface=udp&link=overlay&pk=wrbtPk&message=enc
 
 |Key              |Value                                                                           |Required           |
 |:----------------|:-------------------------------------------------------------------------------|:-----------------:|
-|`type`           |`credentials`                                                                   |:heavy_check_mark: |
-|`interface`      |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |:heavy_check_mark: |
-|`link`           |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |:heavy_check_mark: |
+|`type`           |`credentials`                                                                   |&#10003; |
+|`interface`      |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
+|`link`           |See [Standard Protocols for Connectivity](#standard-protocols-for-connectivity) |&#10003; |
 |`pk`             |public key from peering request; omit when broadcasting                         |                   |
-|`encodedMessage` |credentials encoded with `nacl.encoding.URLSafeBase64Encoder`                   |:heavy_check_mark: |
-|`cjdnsVersion`   |integer                                                                         |:heavy_check_mark: |
-|`wrbtVersion`    |integer                                                                         |:heavy_check_mark: |
+|`encodedMessage` |credentials encoded with `nacl.encoding.URLSafeBase64Encoder`                   |&#10003; |
+|`cjdnsVersion`   |integer                                                                         |&#10003; |
+|`wrbtVersion`    |integer                                                                         |&#10003; |
 
 ## Optional Metadata
 
